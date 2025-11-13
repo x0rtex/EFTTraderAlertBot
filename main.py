@@ -27,7 +27,7 @@ def make_graphql_request(query: str) -> dict:
 def run_query() -> dict:
     query = """
     {
-        traderResetTimes() {
+        traderResetTimes {
             name,
             resetTimestamp
         }
@@ -38,6 +38,7 @@ def run_query() -> dict:
 
 # Parse graphql response into simple dictionary
 def parse_data(data: dict) -> dict[str, str]:
+    print(data)
     return {entry['name']: entry['resetTimestamp'] for entry in data['data']['traderResetTimes']
             if entry['name'] not in {'fence', 'lightkeeper', 'btr driver'}}
 
@@ -65,7 +66,7 @@ async def remind(ctx: discord.ApplicationContext, trader: str, mins_before: int)
         return
 
     mins_before: int = min(mins_before, int(time_left.total_seconds() // 60))
-    reminder_timer: int = max(0, time_left.total_seconds() - (mins_before * 60))
+    reminder_timer: int = max(0, int(time_left.total_seconds()) - (mins_before * 60))
 
     await ctx.respond(f"**{trader.capitalize()}** will reset in **{(time_left.total_seconds() / 60):.1f} minute(s)**. "
                       f"You will be reminded **{mins_before} minute(s)** before they reset.")
@@ -75,6 +76,16 @@ async def remind(ctx: discord.ApplicationContext, trader: str, mins_before: int)
 
     await asyncio.sleep(mins_before * 60)
     await reminder_msg.edit(content=f"<@{ctx.user.id}> **{trader.capitalize()}** has reset!")
+
+
+def create_string(hours: int, minutes: int, seconds: int, prefix: str = "", suffix: str = "") -> str:
+    parts = [prefix,
+             f"{hours}h" if hours > 0 else "",
+             f"{minutes}m" if minutes > 0 else "",
+             f"{seconds}s",
+             suffix]
+
+    return " ".join(part for part in parts if part)
 
 
 # /traders
@@ -90,11 +101,13 @@ async def traders(ctx: discord.ApplicationContext) -> None:
         hours, remainder = divmod(time_left.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
 
-        if time_left.total_seconds() < 0:
+        if time_left.total_seconds() <= 0:
             mins_ago: int = int(abs(time_left.total_seconds()) // 60)
-            embed_msg.add_field(name=trader.capitalize(), value=f"Reset {mins_ago}m ago")
+            reset_time: str = f"Reset {mins_ago}m ago"
         else:
-            embed_msg.add_field(name=trader.capitalize(), value=f"{hours}h {minutes}m {seconds}s")
+            reset_time: str = create_string(hours, minutes, seconds)
+
+        embed_msg.add_field(name=trader.capitalize(), value=reset_time)
 
     await ctx.respond(embed=embed_msg)
 
